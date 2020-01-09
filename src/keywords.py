@@ -15,18 +15,20 @@ from utils import ksc_set
 from utils import run
 var = sys.version[:3]
 if var in ['2.2', '2.3', '2.4']:
-    set = ksc_set # pragma: no cover
+    set = ksc_set  # pragma: no cover
 
-keywords = set(['auto','_Bool','break','case','char','_Complex','const','continue','default',
-                'do','double','else','enum','extern','float','for','goto','if','_Imaginary','inline',
-                'int','long','register','restrict','return','short','signed','sizeof','static','struct',
-                'switch','typedef','union','unsigned','void','volatile','while','','main'])
+keywords = set(['auto', '_Bool', 'break', 'case', 'char', '_Complex', 'const',
+                'continue', 'default', 'do', 'double', 'else', 'enum',
+                'extern', 'float', 'for', 'goto', 'if', '_Imaginary', 'inline',
+                'int', 'long', 'register', 'restrict', 'return', 'short',
+                'signed', 'sizeof', 'static', 'struct', 'switch', 'typedef',
+                'union', 'unsigned', 'void', 'volatile', 'while', 'main'])
 
-endpoints = set(['~','!','@','#',
-                 '$','%','^','&','*',')',
-                 '+','|','>','<','?','/',
-                 '.',',','"',"'",':',
-                 ';','-','[',']','{','}','='])
+endpoints = set(['~', '!', '@', '#',
+                 '$', '%', '^', '&', '*', ')',
+                 '+', '|', '>', '<', '?', '/',
+                 '.', ', ', '"', "'", ':',
+                 ';', '-', '[', ']', '{', '}', '='])
 
 
 def parse_c(path, mock=False):
@@ -50,16 +52,16 @@ def parse_c(path, mock=False):
         line = line.strip()
         word = ""
         w_flag = False
-        if line.startswith('#' ):
+        if line.startswith('#'):
             continue
 
         startstr = False
-        for i,c in enumerate(line):
+        for i, c in enumerate(line):
             if c == '"':
                 if not startstr:
                     startstr = True
                 else:
-                    if i -1 != -1:
+                    if i - 1 != -1:
                         if line[i-1] != '\\':
                             startstr = False
                 continue
@@ -81,7 +83,7 @@ def parse_c(path, mock=False):
             elif c == '(':
                 word = word.strip()
                 if not word:
-                    continue # pragma: no cover
+                    continue  # pragma: no cover
                 if word in keywords or word.startswith("("):
                     word = ""
                     continue
@@ -89,6 +91,5 @@ def parse_c(path, mock=False):
                 word = ""
                 w_flag = False
 
-
-    #pprint(set(result))
+    # pprint(set(result))
     return set(result)

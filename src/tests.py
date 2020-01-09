@@ -12,7 +12,7 @@ class SetTest(unittest.TestCase):
     To test the set operation
     """
     def runTest(self):
-        l = ksc_set([1,2,3,4,1,2,3,2])
+        l = ksc_set([1, 2, 3, 4, 1, 2, 3, 2])
         assert len(l) == 4
 
 
@@ -26,28 +26,21 @@ class WalkTest(unittest.TestCase):
         assert 'ksc.conf' in x
 
 
-class Base64Test(unittest.TestCase):
-    """
-    Test the base64 encoding
-    """
-    def runTest(self):
-        data = encode_base64('/bin/ls')
-
-
 class ReadListTest(unittest.TestCase):
     """
     Test reading whitelist
     """
     def runTest(self):
-        data = read_list("i686","")
+        data = read_list("x86_64", "kabi-current")
         assert len(data) != 0
+
 
 class ReadTotalListTest(unittest.TestCase):
     """
     Test reading all symbol names
     """
     def runTest(self):
-        data = read_total_list("i686")
+        data = read_total_list()
         assert len(data) != 0
 
 
@@ -69,14 +62,16 @@ class FindCTest(unittest.TestCase):
         data = get_cfiles('./data')
         assert len(data) == 1
 
+
 class KeywordsTest(unittest.TestCase):
     """
     To view the keywords
     """
     def runTest(self):
         import keywords
-        assert 'break'  in keywords.keywords
-        assert 'register'  in keywords.keywords
+        assert 'break' in keywords.keywords
+        assert 'register' in keywords.keywords
+
 
 class ParseCTest(unittest.TestCase):
     """
@@ -84,7 +79,8 @@ class ParseCTest(unittest.TestCase):
     """
     def runTest(self):
         data = parse_c('data/test.c')
-        assert set(['printf', 'add_disk','add_drv','call_rcu_bh']) == data
+        assert set(['printf', 'add_disk', 'add_drv', 'call_rcu_bh']) == data
+
 
 class ParseCfailTest(unittest.TestCase):
     """
@@ -94,6 +90,7 @@ class ParseCfailTest(unittest.TestCase):
         data = parse_c('data/does_not_exists.c', True)
         assert [] == data
 
+
 class RunCommandTest(unittest.TestCase):
     """
     To test our own set function
@@ -101,6 +98,7 @@ class RunCommandTest(unittest.TestCase):
     def runTest(self):
         data = run('uname -a')
         self.assertTrue(data.startswith('Linux'))
+
 
 class GetConfigTest(unittest.TestCase):
     """
@@ -113,13 +111,15 @@ class GetConfigTest(unittest.TestCase):
         assert 'group' in data
         assert 'server' in data
 
+
 class CreateBugTest(unittest.TestCase):
     """
     Code to test createbug function
     """
     def runTest(self):
-        bugid = createbug('abcd','x86_64', True) #This is mock
+        bugid = createbug('./data/ksc.conf', 'x86_64', True)  # This is mock
         self.assertEqual(bugid, 0)
+
 
 class KSCTest(unittest.TestCase):
     """
@@ -128,10 +128,11 @@ class KSCTest(unittest.TestCase):
     @patch('xmlrpclib.Server')
     def runTest(self, mock_server):
         s = mock_server.return_value
-        s.Bug.create.return_value = {'id':110}
+        s.Bug.create.return_value = {'id': 110}
         s.bugzilla.addAttachment.return_value = True
         k = Ksc(mock=True)
-        k.main(['-r', 'rhel6.2', '-s', '-d', './data/'])
+        k.main(['-r', '6.2', '-s', '-d', './data/'])
+
 
 class ParseKOTest(unittest.TestCase):
     """
@@ -141,7 +142,7 @@ class ParseKOTest(unittest.TestCase):
     def runTest(self, mock_run):
         mock_run.return_value = 'U add_disk\nU add_drv\nU call_rcu_bh'
         k = Ksc(mock=True)
-        k.read_data('i686','kabi-current')
+        k.read_data('x86_64', 'kabi-current')
         k.parse_ko('./ksc.py')
         assert len(k.all_symbols_used) == 2
         assert len(k.nonwhite_symbols_used) == 1

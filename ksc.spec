@@ -1,5 +1,5 @@
 Name:		ksc
-Version:	0.9.14
+Version:	0.9.18
 Release:	1%{?dist}
 Epoch:		1
 Summary:	Kernel source code checker
@@ -9,8 +9,15 @@ License:	GPLv2+
 URL:		http://www.redhat.com/
 Source0:	ksc-%{version}.tar.gz
 BuildArch:	noarch
-Requires:	python python-pycurl kernel-abi-whitelists binutils cpp file
+Requires:	python
+Requires:	python-pycurl
+Requires:	kernel-abi-whitelists
+Requires:	binutils
+Requires:	kernel-devel
+Requires:	python-magic
+Requires:	python-requests
 BuildRequires:	python
+BuildRequires:	python-setuptools
 
 %description
 A kernel module source code checker to find usage of non whitelist symbols
@@ -26,7 +33,7 @@ A kernel module source code checker to find usage of non whitelist symbols
 install -D ksc.1 %{buildroot}%{_mandir}/man1/ksc.1
 
 %files
-%doc README
+%doc README COPYING PKG-INFO
 %{_bindir}/ksc
 %{_datadir}/ksc
 %{_mandir}/man1/ksc.*
@@ -34,6 +41,22 @@ install -D ksc.1 %{buildroot}%{_mandir}/man1/ksc.1
 %{python_sitelib}/ksc-%{version}*.egg-info
 
 %changelog
+* Tue Sep 6 2016 Stanislav Kozina <skozina@redhat.com> - 0.9.18-1
+- Resolves: #1373208
+
+* Tue Aug 16 2016 Stanislav Kozina <skozina@redhat.com> - 0.9.17-1
+- Add -y option to provide path to the Module.symvers file
+- Resolves: #1367085
+
+* Fri Jul 15 2016 Stanislav Kozina <skozina@redhat.com> - 0.9.16-3
+- Fix requires
+- Resolves: #1356946
+
+* Thu May 26 2016 Stanislav Kozina <skozina@redhat.com> - 0.9.16-1
+- always load whitelist file from kernel-abi-whitelists package, remove the attached files
+- always load Module.symvers file from kernel-devel package, remove attached files
+- Resolves: #1335513
+
 * Tue Aug 12 2014 Jiri Olsa <jolsa@redhat.com> - 0.9.14-1
 - Resolves #1128166
 
