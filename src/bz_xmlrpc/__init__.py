@@ -1,5 +1,5 @@
-#
-# Copyright (C) 2014 Red Hat Inc.
+# Copyright 2010 Red Hat Inc.
+# Author: Shreyank Gupta <sgupta@redhat.com>
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -7,5 +7,4 @@
 # option) any later version.  See http://www.gnu.org/copyleft/gpl.html for
 # the full text of the license.
 
-version = "2.2.0"
-__version__ = version
+from base import BugzillaBase, BugzillaLoginException

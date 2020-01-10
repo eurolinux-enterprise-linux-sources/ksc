@@ -16,16 +16,18 @@ Options:
                         path to previous resultset to submit as bug
   -r RELEASE, --release=RELEASE
                         RHEL whitelist release to compare against
-  -y SYMVERS, --symvers=SYMVERS
-                        Path to the Module.symvers file. The current kernel
-                        path is used if not specified.
   -s, --submit          Submit to Red Hat Bugzilla
   -v, --version         Prints KSC version number
+
+
 
 Valid architectures for binary modules are x86_64, ppc64, s390x.
 The total symbol usage number will vary depending on which architecture it is running
 against as it depends on the symbols provided by Red Hat kernel on that
 architecture.
+
+Valid RHEL whitelist releases are rhel6.0, rhel6.1, rhel6.2, rhel6.3, rhel6.4, rhel7.0
+
 
 Example command and output:
 

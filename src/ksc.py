@@ -10,21 +10,25 @@
 # license.
 #
 import os
-import re
 import sys
+import tempfile
+from pprint import pprint
 from optparse import OptionParser
 from utils import run, read_list
-from utils import read_total_list, get_cfiles, get_release_name
-from utils import createbug, query_user_bool, query_user
+from utils import read_total_list, get_cfiles
+from utils import encode_base64
+from utils import createbug
+from utils import ksc_set
 from keywords import endpoints, keywords, parse_c
 
-KSCVERSION = "ksc - Version 0.11.0"
+KSCVERSION = "ksc - Version 0.9.11"
 
+var = sys.version[:3]
+if var in ['2.2', '2.3', '2.4']:# pragma: no cover
+    set = ksc_set
 
 class Ksc(object):
-    HEADER_RE = re.compile(r"\[command: (?P<cmd>.*)\]")
-
-    def __init__(self, mock=False):
+    def __init__ (self, mock = False):
         """
         Init call
         """
@@ -33,15 +37,12 @@ class Ksc(object):
         self.white_symbols = []
         self.matchdata = None
         self.total = None
+        self.tmplist = []
         self.verbose = False
         self.mock = mock
         self.releasedir = None
-        self.symvers = None
         self.arch = None
-        if mock:
-            self.releasename = '7.0'
-        else:
-            self.releasename = None
+        self.releasename = '7.0'
 
     def clean(self):
         self.all_symbols_used = []
@@ -50,12 +51,13 @@ class Ksc(object):
         self.matchdata = None
         self.total = None
 
+
     def main(self, mock_options=None):
         """
         Main function for the logic
         """
-        filename = os.path.join(os.path.expanduser("~"), "ksc-result.txt")
-        # default architecture
+        filename = os.path.join(os.path.expanduser("~"),"ksc-result.txt")
+        #default architecture
         self.arch = "x86_64"
 
         parser = OptionParser()
@@ -63,85 +65,63 @@ class Ksc(object):
                           help="path to configuration file", metavar="CONFIG")
         parser.add_option("-d", "--directory", dest="directory",
                           help="path to the directory", metavar="DIRECTORY")
-        parser.add_option("-i", "--internal", action="store_true",
-                          dest="internal",
-                          help="to create text files to be used internally ",
-                          metavar="INTERNAL")
-        parser.add_option("-k", "--ko", action="append", dest="ko",
+        parser.add_option("-i", "--internal", action="store_true", dest="internal",
+                          help="to create text files to be used internally ", metavar="INTERNAL")
+        parser.add_option("-k", "--ko", dest="ko",
                           help="path to the ko file", metavar="KO")
         parser.add_option("-n", "--name", dest="releasename",
-                          help="Red Hat release to file the bug against, "
-                               "e.g '6.7'", metavar="RELEASENAME")
+                          help="Red Hat release to file the bug against", metavar="RELEASENAME")
         parser.add_option("-p", "--previous", dest="previous",
                           help="path to previous resultset to submit as bug")
         parser.add_option("-r", "--release", dest="release",
-                          help="RHEL whitelist release to compare against, "
-                               "e.g '6.7'", metavar="RELEASE")
-        parser.add_option("-y", "--symvers", dest="symvers",
-                          help="Path to the Module.symvers file. "
-                               "The current kernel path is used if "
-                               "not specified.",
-                          metavar="SYMVERS")
+                          help="RHEL whitelist release to compare against", metavar="RELEASE")
         parser.add_option("-s", "--submit",
-                          action="store_true", dest="submit", default=False,
-                          help="Submit to Red Hat Bugzilla")
+                  action="store_true", dest="submit", default=False,
+                  help="Submit to Red Hat Bugzilla")
         parser.add_option("-v", "--version",
-                          action="store_true", dest="VERSION", default=False,
-                          help="Prints KSC version number")
+                  action="store_true", dest="VERSION", default=False,
+                  help="Prints KSC version number")
 
-        if not self.mock:  # pragma: no cover
+
+
+        if not self.mock: # pragma: no cover
             (options, args) = parser.parse_args(sys.argv[1:])
-        else:  # pragma: no cover
+        else: # pragma: no cover
             (options, args) = parser.parse_args(mock_options)
 
         if options.VERSION:
             print KSCVERSION
             sys.exit(0)
 
-        # Create the ksc.conf config path
+        #Create the ksc.conf config path
         if options.config:
             path = os.path.abspath(os.path.expanduser(options.config))
         else:
-            path = os.path.expanduser("~/ksc.conf")
+            path = os.path.join(os.path.expanduser("~"),"ksc.conf")
 
         if options.releasename:
             self.releasename = options.releasename
-            if not self.valid_release_version(self.releasename):
-                sys.exit(1)
 
-        if options.release:
-            if not self.valid_release_version(options.release):
-                sys.exit(1)
-
-        if options.releasename and options.release and \
-                        options.release != options.releasename:
-            print "Release and release name do not match."
-            sys.exit(1)
-
-        if options.previous:  # Submit the result of previous run
+        if options.previous: #Submit the result of previous run
             filename = os.path.abspath(os.path.expanduser(options.previous))
             if os.path.basename(filename) != 'ksc-result.txt':
                 print "Please point to the ksc-result.txt file in -p option."
-                sys.exit(1)
-
+                return
             self.submit(filename, path)
             return
 
-        self.releasedir = 'kabi-current'
-        if options.release:
-            if not self.valid_release_version(options.release):
-                sys.exit(1)
-
-            self.releasedir = 'kabi-rhel' + options.release.replace('.', '')
-
-        if options.symvers:
-            self.symvers = options.symvers
+        self.releasedir = 'kabi-rhel70'
+        choices = { 'rhel7.0': 'kabi-rhel70' }
+        if options.release in choices:
+            self.releasedir = choices[options.release]
+        elif not options.release:
+            pass
+        else:
+            print "You provided invalid kABI release name with -r option."
+            return
 
         if options.ko:
-            if len(options.ko) > 1:
-                print "Option -k can be specified only once."
-                sys.exit(1)
-            self.find_arch(options.ko[0])
+            self.find_arch(options.ko)
 
         if options.internal:
             self.create_internal(options)
@@ -149,162 +129,69 @@ class Ksc(object):
 
         if options.directory:
             self.find_files(options.directory)
-        elif options.ko:  # pragma: no cover
-            exists = self.read_data(self.arch, self.releasedir, self.symvers)
-            # Return if there is any issue in reading whitelists
-            if not exists:
-                print("Release %s for arch %s was not found.\n"
-                      "Do you have right kernel-abi-whitelist installed ?" %
-                      (self.releasedir, self.arch))
-                sys.exit(1)
-            self.parse_ko(options.ko[0])
+        elif options.ko: # pragma: no cover
+            val = self.read_data(self.arch, self.releasedir)
+            #Return if there is any issue in reading whitelists
+            if not val:
+                return
+            self.parse_ko(options.ko)
             self.print_result()
-            self.save_result([(self.arch, self.white_symbols,
-                               self.nonwhite_symbols_used)])
-        else:  # pragma: no cover
-            print ("You need to provide a path to a sources directory or "
-                   ".ko file.")
-            sys.exit(1)
+            self.save_result([(self.arch,self.white_symbols, self.nonwhite_symbols_used)])
+        else: #pragma: no cover
+            print "You need to provide a path to a sources directory or .ko file."
+            return
 
-        # Now save the result
+        #Now save the result
 
         if not options.submit:
             return
 
-        if not self.mock:  # pragma: no cover
+
+        if not self.mock: #pragma: no cover
             self.get_justification(filename)
         self.submit(filename, path)
-
-    def valid_release_version(self, release):
-        if release is None:
-            return False
-        rels = release.split(".")
-        if len(rels) != 2:
-            print "Invalid release: %s" % release
-            return False
-        if not rels[0].isdigit() or int(rels[0]) <= 5:
-            print "Invalid release: %s" % release
-            return False
-        return True
-
-    def input_release_name(self):
-        while True:
-            self.releasename = raw_input(
-                "Please enter valid RHEL release to file bug against: ")
-            if self.valid_release_version(self.releasename):
-                break
-            else:
-                print "Wrong input"
 
     def create_internal(self, options):
         """
         Creates the text files for internal usage only.
         """
-        release = get_release_name()
-        if not release:
-            sys.exit(1)
-        major = release.split('.')[0]
-
-        if int(major) >= 7:
-            arch_list = ['x86_64', 's390x', 'ppc64', 'ppc64le', 'aarch64']
-        else:
-            arch_list = ['i686', 'x86_64', 's390x', 'ppc64']
-
         if options.directory:
             file_list = get_cfiles(options.directory)
             result = []
 
-            for arch in arch_list:
+            for arch in ['x86_64', 's390x', 'ppc64']:
                 self.clean()
                 self.arch = arch
-                _ = self.read_data(self.arch, self.releasedir, self.symvers)
+                val = self.read_data(self.arch, self.releasedir)
+                #Return if there is any issue in reading whitelists
+                if not val:
+                    return
                 for f in file_list:
+                    self.tmplist = []
                     allsyms = parse_c(f, self.mock)
                     map(self.find_if, allsyms)
 
                 result.append((self.arch, self.nonwhite_symbols_used))
-            # now save the result
+            #now save the result
             self.save_result_internal(result)
         elif options.ko:  # pragma: no cover
-            exists = self.read_data(self.arch, self.releasedir, self.symvers)
-            # Return if there is any issue in reading whitelists
-            if not exists:
-                sys.exit(1)
-
-            self.parse_ko(options.ko[0])
-            self.save_result_internal([(self.arch,
-                                        self.nonwhite_symbols_used)])
+            val = self.read_data(self.arch, self.releasedir)
+            #Return if there is any issue in reading whitelists
+            if not val:
+                return
+            self.parse_ko(options.ko)
+            self.save_result_internal([(self.arch, self.nonwhite_symbols_used)])
 
     def save_result_internal(self, data):
         "Saves the data in text format for internal usage"
 
         for datum in data:
-            filename = os.path.join(os.path.expanduser("~"),
-                                    "ksc-internal-%s.yml" % datum[0])
+            filename = os.path.join(os.path.expanduser("~"), "ksc-internal-%s.yml" % datum[0])
             fobj = open(filename, 'w')
             for name in datum[1]:
                 fobj.write('%s: "Enter justification text here."\n' % name)
             fobj.close()
             print filename
-
-    def submit_get_consent(self):
-
-        """
-        Part of the submission process. User gets queried for Red Hat's
-        receipt and internal use. Consent is mandatory.
-        """
-        consent_string = "By using ksc to upload your data to Red Hat, " \
-            "you consent to Red Hat's receipt use and analysis of this " \
-            "data."
-        print consent_string
-
-        consent = query_user_bool("y/N: ", "")
-        if consent.lower() != 'y':
-            sys.exit(1)
-
-    def submit_get_release(self):
-        """
-        Part of the submission process. User gets queried for release if
-        not explicitly provided via argv.
-        """
-
-        # Release has been specified as argv, no need to query user at this time
-        if self.releasename is not None:
-            return
-
-        print "RHEL release not specified with -n flag. Taking RHEL release " \
-            "from system."
-
-        self.releasename = get_release_name()
-        use_sys_release  = ""
-        if not self.releasename:
-            print "Unable to determine system's release name. Please specify."
-
-        else:
-            print "File bug against RHEL release {0}? ".format(
-                self.releasename)
-
-            use_sys_release = query_user_bool("y/N: ", "Invalid response")
-
-            if not use_sys_release:
-                print "Unable to determine user option. Qutting."
-                sys.exit(1)
-
-        # Either system-determine RHEL release is not what user wishes to file
-        # against, or ksc couldn't determine the release; query user to specify
-        if use_sys_release.lower() == 'n' or not self.releasename:
-            release_name = query_user(
-                "Please enter valid RHEL release to file bug against: ",
-                is_valid=self.valid_release_version,
-                invalid_msg="Wrong input"
-            )
-
-            if not release_name:
-                print "Unable to determine a valid RHEL release. Qutting."
-                sys.exit(1)
-
-            else:
-                print "Using RHEL %s release." % release_name
 
     def submit(self, filename, path):
         """
@@ -313,20 +200,18 @@ class Ksc(object):
         :arg filename: Full path the ksc-result.txt file.
         :arg path: Path to the config file.
         """
-        try:
-            with open(filename, "r") as fptr:
-                line = fptr.readline().strip()
-                module_name = self.get_module_name(line)
-        except IOError as err:
-            print "Unable to read previous result: {}".format(err)
-            sys.exit(1)
-
-        if not self.mock:
-            self.submit_get_consent()
-            self.submit_get_release()
-
-        createbug(filename, self.arch, mock=self.mock, path=path,
-                  releasename=self.releasename, module=module_name)
+        if not self.mock: #Ask for user permission
+            print "By using ksc to upload your data to Red Hat,",\
+                             " you consent to Red Hat's receipt,"
+            print "use and analysis of this data."
+            while True:
+                ans = raw_input("y/N:")
+                if ans == 'N':
+                    return
+                elif ans == 'y':
+                    break
+        data = encode_base64(filename)
+        createbug(data, self.arch, mock=self.mock, path=path, releasename=self.releasename, filename = filename)
 
     def get_justification(self, filename):
         """
@@ -338,53 +223,45 @@ class Ksc(object):
         reset = "\033[0;0m"
 
         print bold
-        print 'On the next screen, the result log will be opened to allow'
-        print 'you to provide technical justification on why these symbols'
-        print 'need to be included in the KABI whitelist.'
-        print 'Please provide sufficient information in the log, marked with '
-        print 'the line below:'
+        print "On the next screen, the result log will be opened to allow"
+        print 'you to provide technical justification on why these symbols need to'
+        print 'be included in the KABI whitelist.'
+        print 'Please provide sufficient information in the log, marked with the'
+        print 'line below:'
 
         print "\nENTER JUSTIFICATION TEXT HERE\n" + reset
         print bold + 'Press ENTER for next screen.' + reset
-        try:
-            raw_input()
-        except EOFError:
-            print "Warning: Running in a non-interactive mode."
+        raw_input()
 
         editor = os.getenv('EDITOR')
         if editor:
             os.system(editor + ' ' + filename)
         else:
-            os.system('vi ' + filename)
+            os.system('vi '+ filename)
         return True
 
     def save_result(self, data):
         """
         Save the result in a text file
         """
-        output_filename = os.path.expanduser("~/ksc-result.txt")
-        if os.path.isfile(output_filename):
-            res = query_user_bool("ksc-result.txt already exists. Do you want"\
-                            " to overwrite it ? [y/N]: ", "")
-            if res.lower() != 'y':
-                print "User interrupt"
-                sys.exit(-1)
+        filename = os.path.join(os.path.expanduser("~"),"ksc-result.txt")
         try:
-            f = open(output_filename, "w")
-            for i, datum in enumerate(sorted(data)):
+            f = open(filename, "w")
+            for i, datum in enumerate(data):
                 if i == 0:
                     command = "[command: %s]\n" % " ".join(sys.argv)
                 else:
                     command = ""
-                self.write_result(f, datum[0], command, datum[1],
-                                  datum[2])
+                self.write_result(f, datum[0], command, datum[1], \
+                                    datum[2])
             f.close()
             if not self.mock:
-                print "A copy of the report is saved in %s" % output_filename
+                print "A copy of the report is saved in %s" % filename
 
-        except Exception as e:
-            print "Error in saving the result file at %s" % output_filename
+        except Exception, e:
+            print "Error in saving the result file at %s" % filename
             print e
+
 
     def print_result(self):
         """
@@ -392,9 +269,9 @@ class Ksc(object):
         """
         total_len = len(set(self.all_symbols_used))
         non_white = len(set(self.nonwhite_symbols_used))
-        white_len = float(len(set(self.white_symbols)))
+        white_len = float (len(set(self.white_symbols)))
 
-        if total_len == 0:  # pragma: no cover
+        if total_len == 0: # pragma: no cover
             print "No kernel symbol usage found."
             return
 
@@ -402,37 +279,28 @@ class Ksc(object):
 
         if not self.mock:
             print "Checking against architecture %s" % self.arch
-            print "Total symbol usage: %s\t" \
-                  "Total Non white list symbol usage: %s" \
+            print "Total symbol usage: %s\t"\
+                  "Total Non white list symbol usage: %s"\
                   % (total_len, non_white)
             print "Score: %0.2f%%\n" % score
+
+
 
     def find_arch(self, path):
         """
         Finds the architecture of the file in given path
         """
-        rset = {'littleendianIntel80386' : 'i686',
-                'bigendianPowerPC64' : 'ppc64',
-                'littleendianPowerPC64' : 'ppc64le',
-                'littleendianAdvancedMicroDevicesX86-64' : 'x86_64',
-                'bigendianIBMS/390' : 's390x',
-                'littleendianAArch64' : 'aarch64'}
         try:
-            data = run("readelf -h %s | grep -e Data -e Machine | awk -F "
-                       "':' '{print $2}' | paste -d ' '  - - | awk -F ',' "
-                       "'{print $2}' | sed 's/[ \t]*//g'" % path)
-            arch = rset[data.strip()]
+            rset = {'IBM S/390': 's390x', '64-bit PowerPC or cisco 7500': 'ppc64',
+                    'x86-64': 'x86_64'}
+            data = run("file %s" % path)
+            part = data.split(":")[1].split(",")[1]
+            arch = rset.get(part.strip(), 'x86_64')
             self.arch = arch
-        except IOError as e:
-            print e,
-            print ("(Only kernel object files are supported)") \
-                if "No such file" not in e.message \
-                else ""
+        except:
+            print "Invalid architecture, supported architectures are x86_64,ppc64,s390x"
             sys.exit(1)
-        except KeyError:
-            print "%s: Invalid architecture. (only %s are supported)" \
-                  % (path, ', '.join(sorted(rset.values())))
-            sys.exit(1)
+
 
     def write_result(self, f, arch, command="", whitelist=[], nonwhitelist=[]):
         """
@@ -443,39 +311,44 @@ class Ksc(object):
                 f.write("%s" % command)
             f.write("[%s]\n" % arch)
             f.write("[WHITELISTUSAGE]\n")
-            for name in sorted(set(whitelist)):
+            for name in set(whitelist):
                 f.write(name + '\n')
             f.write("[NONWHITELISTUSAGE]\n")
-            for name in sorted(set(nonwhitelist)):
+            for name in set(nonwhitelist):
                 f.write('#' * 10)
                 f.write('\n(%s)\n\nENTER JUSTIFICATION TEXT HERE\n\n' % name)
             if set(nonwhitelist):
                 f.write('#' * 10)
                 f.write('\n')
-        except Exception as err:
+        except Exception, err:
             print err
 
-    def read_data(self, arch, releasedir, symvers):
+
+
+    def read_data(self, arch, releasedir):
         """
         Read both data files
         """
-        self.matchdata, exists = read_list(arch, releasedir, self.verbose)
-        self.total = read_total_list(symvers)
-        return exists
+        self.matchdata = read_list(arch, releasedir, self.verbose);
+        self.total = read_total_list(arch);
+        if self.matchdata == []:
+            return False #Means exit now
+        return True #Do not exit
 
     def parse_ko(self, path):
         """
         parse a ko file
         """
-        try:
-            out = run("nm -u '%s'" % path)
-        except Exception as e:
-            print e
-            sys.exit(1)
+        if not os.path.isfile(path):
+            print "KO file can not be found"
+            return
+
+        out = run("nm -u %s" % path )
         for line in out.split("\n"):
             data = line.split("U ")
-            if len(data) == 2:
+            if len(data)  == 2:
                 self.find_if(data[1])
+        #self.print_tmplist(path)
 
     def find_if(self, name):
         """
@@ -487,63 +360,38 @@ class Ksc(object):
         if name in self.matchdata:
             self.white_symbols.append(name)
             self.all_symbols_used.append(name)
-        else:
+        elif name in self.total:
             self.all_symbols_used.append(name)
             self.nonwhite_symbols_used.append(name)
-            if name not in self.total:
-                print "WARNING: External symbol does not exist in current " \
-                      "kernel: %s" % name
+            self.tmplist.append(name)
+
+
 
     def find_files(self, path):
         file_list = get_cfiles(path)
         result = []
-        release = get_release_name()
-        if not release:
-            sys.exit(1)
 
-        major = release.split('.')[0]
-
-        if int(major) >= 7:
-            arch_list = ['x86_64', 's390x', 'ppc64', 'ppc64le', 'aarch64']
-        else:
-            arch_list = ['i686', 'x86_64', 's390x', 'ppc64']
-
-        for arch in arch_list:
+        for arch in ['x86_64', 's390x', 'ppc64']:
             self.clean()
             self.arch = arch
-            _ = self.read_data(self.arch, self.releasedir, self.symvers)
+            val = self.read_data(self.arch, self.releasedir)
+            #Return if there is any issue in reading whitelists
+            if not val:
+                return
 
             for f in file_list:
+                self.tmplist = []
                 allsyms = parse_c(f, self.mock)
                 map(self.find_if, allsyms)
+                #self.print_tmplist(f)
 
             self.print_result()
-            result.append((self.arch, self.white_symbols,
-                           self.nonwhite_symbols_used))
-        # now save the result
+            result.append((self.arch,self.white_symbols, self.nonwhite_symbols_used))
+        #now save the result
         self.save_result(result)
-        # set the architecture of the bug as no-arch
+        #set the architecture of the bug as no-arch
         self.arch = "noarch"
 
-    def get_module_name(self, command_line):
-        try:
-            match = self.HEADER_RE.match(command_line)
-            if not match:
-                return None
-            commands = match.group("cmd").split()
-
-            # Ignore undefined options in parser instead of throwing error
-            class IOptParse(OptionParser):
-                def error(self, msg):
-                    pass
-
-            parser = IOptParse()
-            parser.add_option("-d", "--directory")
-            parser.add_option("-k", "--ko")
-            opts, _ = parser.parse_args(commands[0:])
-            return opts.directory or opts.ko
-        except Exception:
-            return None
 
 
 if __name__ == '__main__':
