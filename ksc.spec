@@ -1,5 +1,5 @@
 Name:		ksc
-Version:	0.9.18
+Version:	0.9.22
 Release:	1%{?dist}
 Summary:	Kernel source code checker
 Group:		Development/Tools
@@ -40,6 +40,27 @@ install -D ksc.1 %{buildroot}%{_mandir}/man1/ksc.1
 %{python_sitelib}/ksc-%{version}*.egg-info
 
 %changelog
+* Wed Dec 13 2017 Martin Lacko <mlacko@redhat.com> - 0.9.22-1
+- Resolves: #1524779
+
+* Tue Dec 5 2017 Martin Lacko <mlacko@redhat.com> - 0.9.21-1
+- Resolves: #1520224
+
+* Tue Nov 28 2017 Martin Lacko <mlacko@redhat.com> - 0.9.20-1
+- Resolves: #1502930
+
+* Tue Nov 7 2017 Stanislav Kozina <skozina@redhat.com> - 0.9.19-1
+- Resolves: #1432864
+- Resolves: #1500383
+- Resolves: #1502930
+- Resolves: #1503526
+- Resolves: #1503603
+- Resolves: #1503964
+- Resolves: #1499249
+- Resolves: #1441455
+- Resolves: #1481310
+- Resolves: #1456140
+
 * Mon Sep 5 2016 Stanislav Kozina <skozina@redhat.com> - 0.9.18-1
 - Resolves: #1373120
 

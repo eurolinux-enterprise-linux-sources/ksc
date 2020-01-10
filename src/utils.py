@@ -11,21 +11,12 @@
 """This is the utility module for ksc
 This contains various utility functions."""
 import sys
-from bugzilla import Bugzilla
+from bugzilla import Bugzilla, BugzillaError
 
 import os
-import base64
+import time
 import getpass
-import xmlrpclib
-
-VAR = sys.version[:3]
-# Try to import subprocess for latest pythons
-try:  # pragma: no cover
-    import subprocess
-except ImportError:  # pragma: no cover
-    # We don't have subprocess # pragma: no cover
-    # We will use os.popen # pragma: no cover
-    pass
+import subprocess
 
 # whitelist directory
 WHPATH = '/lib/modules'
@@ -33,85 +24,18 @@ WHPATH = '/lib/modules'
 SRCPATH = '/usr/src/kernels'
 
 
-def ksc_set(seq):
-    """
-    Internal implementaion set for older
-    python versions
-    """
-    data = []
-    for val in seq:
-        if val not in data:
-            data.append(val)
-    return data
-
-
-def ksc_walk(top, topdown=True, onerror=None, followlinks=False):
-    """
-    Internal implementation of os.walk for older
-    python versions
-    """
-    try:
-        names = os.listdir(top)
-    except OSError, err:  # pragma: no cover
-        print err
-        return
-
-    dirs, nondirs = [], []
-    for name in names:
-        if os.path.isdir(os.path.join(top, name)):
-            dirs.append(name)
-        else:
-            nondirs.append(name)
-
-    res = []
-    res.append([top, dirs, nondirs])
-    for name in dirs:
-        path = os.path.join(top, name)
-        if followlinks or not os.path.islink(path):  # pragma: no cover
-            for fpath in ksc_walk(path, topdown, onerror, followlinks):
-                res.append(fpath)
-    return res
-
-
-class Myfile:
-    """
-    Internal file like object
-    """
-
-    def __init__(self):
-        self.data = ""
-
-    def write(self, info):
-        """
-        Writes data
-        """
-        self.data = self.data + info
-
-    def read(self):
-        """
-        Reads the data
-        """
-        return self.data
-
-
-if VAR in ['2.2', '2.3', '2.4']:  # pragma: no cover
-    set = ksc_set
-    WALK = ksc_walk
-else:
-    WALK = os.walk
-
-
 def get_release_name():
     if not os.path.isfile('/etc/redhat-release'):
         print 'This tool needs to run on Red Hat Enterprise Linux'
         return None
 
-    release = open('/etc/redhat-release', 'r').read().split(' ')
-    if len(release) <= 6:
-        print 'This tool needs to run on Red Hat Enterprise Linux'
-        return None
+    with open('/etc/redhat-release', 'r') as fptr:
+        release = fptr.read().split(' ')
+        if len(release) <= 6:
+            print 'This tool needs to run on Red Hat Enterprise Linux'
+            return None
 
-    return '.'.join(release[6].split('.'))
+    return release[6]
 
 
 def read_list(arch, kabipath, verbose=False):
@@ -122,7 +46,7 @@ def read_list(arch, kabipath, verbose=False):
     fpath = os.path.join(WHPATH, kabipath, "kabi_whitelist_%s" % arch)
     if not os.path.isfile(fpath):  # pragma: no cover
         print "File not found:", fpath
-        return result
+        return [], False
     try:
         if verbose:  # pragma: no cover
             print "Reading %s" % fpath
@@ -132,13 +56,14 @@ def read_list(arch, kabipath, verbose=False):
                 continue
             result.append(line.strip("\n\t"))
         fptr.close()
-    except IOError, err:  # pragma: no cover
+    except IOError as err:  # pragma: no cover
         print err
         print "whitelist missing"
-    return result
+
+    return result, True
 
 
-def read_total_list(symvers):
+def read_total_list(symvers=None):
     """
     Reads total symbol list and returns the list
     """
@@ -151,13 +76,12 @@ def read_total_list(symvers):
         sys.exit(1)
     result = []
     try:
-        fptr = open(symvers)
-        for line in fptr.readlines():
-            if line.startswith("["):
-                continue  # pragma: no cover
-            result.append(line.split()[1])
-        fptr.close()
-    except IOError, err:  # pragma: no cover
+        with open(symvers, "r") as fptr:
+            for line in fptr.readlines():
+                if line.startswith("["):
+                    continue  # pragma: no cover
+                result.append(line.split()[1])
+    except IOError as err:  # pragma: no cover
         print err
         print "Missing all symbol list"
     return result
@@ -167,14 +91,13 @@ def run(command):
     """
     runs the given command
     """
-    if VAR in ['2.6', '2.7']:
-        ret = subprocess.Popen(command, shell=True, stdin=subprocess.PIPE,
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               close_fds=True)
-        out, _ = ret.communicate()
-    else:  # pragma: no cover
-        fptr = os.popen(command)
-        out = fptr.read()
+    ret = subprocess.Popen(command, shell=True, stdin=subprocess.PIPE,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                           close_fds=True)
+    out, err = ret.communicate()
+    if err:
+        errs = err.split(':', 1)
+        raise IOError(errs[1].strip() if len(errs) > 1 else err)
     return out
 
 
@@ -182,7 +105,7 @@ def get_cfiles(path):
     """ This will return a list of C files"""
     image_list = []
 
-    for root, _, files in WALK(path):
+    for root, _, files in os.walk(path):
         for name in files:
             if name.lower().endswith('.c'):
                 image_list.append(os.path.join(root, name))
@@ -232,14 +155,14 @@ def getconfig(path='/etc/ksc.conf', mock=False):
             print "Error: missing values in configuration file."
             print "Bug not submitted"
             sys.exit(1)
-    except Exception, err:
+    except Exception as err:
         print "Error reading %s" % path
         sys.exit(1)
     return result
 
 
 def createbug(filename, arch, mock=False, path='/etc/ksc.conf',
-              releasename='7.0'):
+              releasename='7.0', module=None):
     """
     Opens a bug in the Bugzilla
     """
@@ -263,6 +186,9 @@ def createbug(filename, arch, mock=False, path='/etc/ksc.conf',
     bughash["qa_contact"] = "kernel-qe@redhat.com"
     groups = ["redhat"]
 
+    if module:
+        bughash["summary"] += " ({})".format(str(module))
+
     # We change the path if only it is mock
     if mock:
         print "Using local config file data/ksc.conf"
@@ -270,7 +196,7 @@ def createbug(filename, arch, mock=False, path='/etc/ksc.conf',
 
     try:
         conf = getconfig(path, mock=mock)
-    except Exception, err:
+    except Exception as err:
         print "Problem in parsing the configuration."
         print err
         return
@@ -292,7 +218,7 @@ def createbug(filename, arch, mock=False, path='/etc/ksc.conf',
             url=conf['server'],
             user=conf["user"],
             password=conf["password"]
-            )
+        )
 
         if not mock:  # pragma: no cover
             print "Creating a new bug"
@@ -310,7 +236,7 @@ def createbug(filename, arch, mock=False, path='/etc/ksc.conf',
                 priority=bughash['priority'],
                 description=bughash['description'],
                 groups=bughash['groups']
-                )
+            )
             ret['cf_partner'] = bughash['cf_partner']
             bug = bz.createbug(ret)
 
@@ -318,7 +244,7 @@ def createbug(filename, arch, mock=False, path='/etc/ksc.conf',
 
             if not mock:  # pragma: no cover
                 print "Bug URL %s/show_bug.cgi?id=%s" % \
-                    (conf['server'][:-11], bugid)
+                      (conf['server'][:-11], bugid)
                 print "Attaching the report"
 
             dhash = {}
@@ -326,23 +252,25 @@ def createbug(filename, arch, mock=False, path='/etc/ksc.conf',
             dhash["contenttype"] = "text/plain"
             desc = "kABI symbol usage."
 
-            fileobj = open(filename)
-            attachment_id = bz.attachfile(bugid, fileobj, desc, **dhash)
+            for _ in range(3):
+                with open(filename, "r") as fptr:
+                    attachment_id = bz.attachfile(bugid, fptr, desc, **dhash)
 
-            if not mock:  # pragma: no cover
-                if not attachment_id:
-                    print "Failed to attach symbol usage result"
-                    sys.exit()
-                    return
-                else:
-                    print "Attached successfully as %i on bug %s" % \
-                        (attachment_id, bugid)
+                if not mock:  # pragma: no cover
+                    if not attachment_id:
+                        time.sleep(1)
+                    else:
+                        print "Attached successfully as %s on bug %s" % (attachment_id, bugid)
+                        break
+            else:
+                print "Failed to attach symbol usage result"
+                sys.exit()
 
-        except Exception, err:  # pragma: no cover
+        except Exception as err:  # pragma: no cover
             print "Could not create bug. %s" % err
             if not mock:
                 sys.exit(1)
-    except xmlrpclib.Error, err:
+    except BugzillaError as err:
         print "Bug not submitted. %s" % err
         if not mock:
             sys.exit(1)

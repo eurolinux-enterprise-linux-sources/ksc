@@ -30,18 +30,19 @@ class TestCommand(Command):
         t = TextTestRunner(verbosity=1)
         t.run(tests)
 
+
 bugzilla = []
 for x in os.listdir('bugzilla/'):
     bugzilla.append('bugzilla/%s' % x)
 
 setup(name='ksc',
-      version='0.9.18',
+      version='0.9.22',
       description="ksc tool",
       long_description="Kernel Module Source Checker tool",
       cmdclass={'test': TestCommand},
       platforms=["Linux"],
-      author="Kushal Das, Samikshan Bairagya, Stanislav Kozina",
-      author_email="kdas@redhat.com, sbairagy@redhat.com, skozina@redhat.com",
+      author="Kushal Das, Samikshan Bairagya, Stanislav Kozina, Martin Lacko, Ziqian Sun",
+      author_email="kdas@redhat.com, sbairagy@redhat.com, skozina@redhat.com, mlacko@redhat.com, zsun@redhat.com",
       url="http://redhat.com",
       license="http://www.gnu.org/copyleft/gpl.html",
       data_files=[("/usr/bin", ['ksc']),

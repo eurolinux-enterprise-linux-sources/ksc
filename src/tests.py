@@ -1,29 +1,8 @@
 import unittest
-import os
 from utils import *
 from keywords import *
 from ksc import Ksc
-import xmlrpclib
 from mock import Mock, patch
-
-
-class SetTest(unittest.TestCase):
-    """
-    To test the set operation
-    """
-    def runTest(self):
-        l = ksc_set([1, 2, 3, 4, 1, 2, 3, 2])
-        assert len(l) == 4
-
-
-class WalkTest(unittest.TestCase):
-    """
-    To test ksc walk function
-    """
-    def runTest(self):
-        x = ksc_walk('./data')
-        x = x[0][2]
-        assert 'ksc.conf' in x
 
 
 class ReadListTest(unittest.TestCase):
@@ -31,7 +10,7 @@ class ReadListTest(unittest.TestCase):
     Test reading whitelist
     """
     def runTest(self):
-        data = read_list("x86_64", "kabi-current")
+        data, _ = read_list("x86_64", "kabi-current")
         assert len(data) != 0
 
 
@@ -42,16 +21,6 @@ class ReadTotalListTest(unittest.TestCase):
     def runTest(self):
         data = read_total_list()
         assert len(data) != 0
-
-
-class MyfileTest(unittest.TestCase):
-    """
-    To test the internal file like object
-    """
-    def runTest(self):
-        mf = Myfile()
-        mf.write("hello")
-        assert "hello" == mf.read()
 
 
 class FindCTest(unittest.TestCase):
@@ -79,7 +48,7 @@ class ParseCTest(unittest.TestCase):
     """
     def runTest(self):
         data = parse_c('data/test.c')
-        assert set(['printf', 'add_disk', 'add_drv', 'call_rcu_bh']) == data
+        assert {'printf', 'add_disk', 'add_drv', 'call_rcu_bh'} == data
 
 
 class ParseCfailTest(unittest.TestCase):
@@ -118,20 +87,6 @@ class CreateBugTest(unittest.TestCase):
     """
     def runTest(self):
         bugid = createbug('./data/ksc.conf', 'x86_64', True)  # This is mock
-        self.assertEqual(bugid, 0)
-
-
-class KSCTest(unittest.TestCase):
-    """
-    Code to test the main workflow class
-    """
-    @patch('xmlrpclib.Server')
-    def runTest(self, mock_server):
-        s = mock_server.return_value
-        s.Bug.create.return_value = {'id': 110}
-        s.bugzilla.addAttachment.return_value = True
-        k = Ksc(mock=True)
-        k.main(['-r', '6.2', '-s', '-d', './data/'])
 
 
 class ParseKOTest(unittest.TestCase):

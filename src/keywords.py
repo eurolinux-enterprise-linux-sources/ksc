@@ -8,27 +8,24 @@
 # http://www.gnu.org/copyleft/gpl.html for the full text of the
 # license.
 #
-from pprint import pprint
 import sys
 import os
-from utils import ksc_set
 from utils import run
+
 var = sys.version[:3]
-if var in ['2.2', '2.3', '2.4']:
-    set = ksc_set  # pragma: no cover
 
-keywords = set(['auto', '_Bool', 'break', 'case', 'char', '_Complex', 'const',
-                'continue', 'default', 'do', 'double', 'else', 'enum',
-                'extern', 'float', 'for', 'goto', 'if', '_Imaginary', 'inline',
-                'int', 'long', 'register', 'restrict', 'return', 'short',
-                'signed', 'sizeof', 'static', 'struct', 'switch', 'typedef',
-                'union', 'unsigned', 'void', 'volatile', 'while', 'main'])
+keywords = {'auto', '_Bool', 'break', 'case', 'char', '_Complex', 'const',
+            'continue', 'default', 'do', 'double', 'else', 'enum',
+            'extern', 'float', 'for', 'goto', 'if', '_Imaginary', 'inline',
+            'int', 'long', 'register', 'restrict', 'return', 'short',
+            'signed', 'sizeof', 'static', 'struct', 'switch', 'typedef',
+            'union', 'unsigned', 'void', 'volatile', 'while', 'main'}
 
-endpoints = set(['~', '!', '@', '#',
-                 '$', '%', '^', '&', '*', ')',
-                 '+', '|', '>', '<', '?', '/',
-                 '.', ', ', '"', "'", ':',
-                 ';', '-', '[', ']', '{', '}', '='])
+endpoints = {'~', '!', '@', '#',
+             '$', '%', '^', '&', '*', ')',
+             '+', '|', '>', '<', '?', '/',
+             '.', ', ', '"', "'", ':',
+             ';', '-', '[', ']', '{', '}', '='}
 
 
 def parse_c(path, mock=False):
@@ -62,7 +59,7 @@ def parse_c(path, mock=False):
                     startstr = True
                 else:
                     if i - 1 != -1:
-                        if line[i-1] != '\\':
+                        if line[i - 1] != '\\':
                             startstr = False
                 continue
             if startstr:
@@ -90,6 +87,4 @@ def parse_c(path, mock=False):
                 result.append(word)
                 word = ""
                 w_flag = False
-
-    # pprint(set(result))
     return set(result)
