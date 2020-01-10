@@ -11,21 +11,23 @@ Options:
   -i, --internal        to create text files to be used internally
   -k KO, --ko=KO        path to the ko file
   -n RELEASENAME, --name=RELEASENAME
-                        Red Hat release against which the bug is to be filed. Default value is 7.0
+                        Red Hat release against which the bug is to be filed. Default value is 6.5
   -p PREVIOUS, --previous=PREVIOUS
                         path to previous resultset to submit as bug
   -r RELEASE, --release=RELEASE
                         RHEL whitelist release to compare against
-  -y SYMVERS, --symvers=SYMVERS
-                        Path to the Module.symvers file. The current kernel
-                        path is used if not specified.
   -s, --submit          Submit to Red Hat Bugzilla
   -v, --version         Prints KSC version number
 
-Valid architectures for binary modules are x86_64, ppc64, s390x.
+
+
+Valid architectures for binary modules are i686, x86_64, ppc64, s390x.
 The total symbol usage number will vary depending on which architecture it is running
 against as it depends on the symbols provided by Red Hat kernel on that
 architecture.
+
+Valid RHEL whitelist releases are rhel6.0, rhel6.1, rhel6.2, rhel6.3, rhel6.4
+
 
 Example command and output:
 
